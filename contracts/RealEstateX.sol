@@ -4,86 +4,101 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-contract RealEstateX is ERC721Enumerable, Ownable {
+contract EstateChain is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
-    Counters.Counter private _tokenIdCounter;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
-    struct Property {
-        string physicalAddress;
-        uint256 squareFootage;
-        uint256 valuation;
-        string geoCoordinates;
-        string legalDescription;
+    Counters.Counter private _idTracker;
+
+    struct Estate {
+        string location;
+        uint256 area;
+        uint256 price;
+        string coordinates;
+        string description;
     }
 
-    mapping(uint256 => Property) public properties;
-    mapping(uint256 => uint256) public propertyShares;
-    mapping(uint256 => address[]) public propertyOwners;
-    mapping(uint256 => mapping(address => uint256)) public ownershipPercentage;
+    mapping(uint256 => Estate) private estateData;
+    mapping(uint256 => uint256) private totalUnits;
+    mapping(uint256 => EnumerableSet.AddressSet) private estateOwners;
+    mapping(uint256 => mapping(address => uint256)) private shareholdings;
 
-    event PropertyTokenized(uint256 indexed tokenId, address indexed owner);
-    event OwnershipTransferred(uint256 indexed tokenId, address from, address to, uint256 shares);
-    event PropertyValuationUpdated(uint256 indexed tokenId, uint256 newValuation);
+    event EstateMinted(uint256 indexed estateId, address indexed initiator);
+    event ShareTransferred(uint256 indexed estateId, address from, address to, uint256 units);
+    event ValuationChanged(uint256 indexed estateId, uint256 updatedPrice);
 
-    constructor() ERC721("RealEstateX", "REX") Ownable(msg.sender) {}
+    constructor() ERC721("EstateChain", "ECH") Ownable(msg.sender) {}
 
-    function tokenizeProperty(
-        string memory _physicalAddress,
-        uint256 _squareFootage,
-        uint256 _valuation,
-        string memory _geoCoordinates,
-        string memory _legalDescription,
-        uint256 _totalShares
+    function mintEstate(
+        string calldata location,
+        uint256 area,
+        uint256 value,
+        string calldata coordinates,
+        string calldata legalText,
+        uint256 units
     ) external {
-        uint256 tokenId = _tokenIdCounter.current();
-        _tokenIdCounter.increment();
+        uint256 estateId = _idTracker.current();
+        _idTracker.increment();
 
-        _mint(msg.sender, tokenId);
-        properties[tokenId] = Property({
-            physicalAddress: _physicalAddress,
-            squareFootage: _squareFootage,
-            valuation: _valuation,
-            geoCoordinates: _geoCoordinates,
-            legalDescription: _legalDescription
-        });
-
-        propertyShares[tokenId] = _totalShares;
-        propertyOwners[tokenId].push(msg.sender);
-        ownershipPercentage[tokenId][msg.sender] = _totalShares;
-
-        emit PropertyTokenized(tokenId, msg.sender);
+        _safeMint(msg.sender, estateId);
+        _createEstate(estateId, location, area, value, coordinates, legalText, units);
+        emit EstateMinted(estateId, msg.sender);
     }
 
-    function transferOwnershipShares(
-        uint256 _tokenId,
-        address _to,
-        uint256 _shares
+    function _createEstate(
+        uint256 estateId,
+        string memory location,
+        uint256 area,
+        uint256 value,
+        string memory coordinates,
+        string memory legalText,
+        uint256 units
+    ) internal {
+        estateData[estateId] = Estate(location, area, value, coordinates, legalText);
+        totalUnits[estateId] = units;
+        estateOwners[estateId].add(msg.sender);
+        shareholdings[estateId][msg.sender] = units;
+    }
+
+    function transferShares(
+        uint256 estateId,
+        address recipient,
+        uint256 units
     ) external {
-        require(ownerOf(_tokenId) == msg.sender, "Not property owner");
-        require(ownershipPercentage[_tokenId][msg.sender] >= _shares, "Insufficient shares");
+        require(ownerOf(estateId) == msg.sender, "Only estate owner");
+        require(shareholdings[estateId][msg.sender] >= units, "Not enough units");
 
-        ownershipPercentage[_tokenId][msg.sender] -= _shares;
-        ownershipPercentage[_tokenId][_to] += _shares;
+        shareholdings[estateId][msg.sender] -= units;
+        shareholdings[estateId][recipient] += units;
 
-        if (balanceOf(_to) == 0) {
-            _transfer(msg.sender, _to, _tokenId);
+        if (!estateOwners[estateId].contains(recipient)) {
+            estateOwners[estateId].add(recipient);
         }
 
-        emit OwnershipTransferred(_tokenId, msg.sender, _to, _shares);
+        if (balanceOf(recipient) == 0) {
+            _transfer(msg.sender, recipient, estateId);
+        }
+
+        emit ShareTransferred(estateId, msg.sender, recipient, units);
     }
 
-    function updateValuation(uint256 _tokenId, uint256 _newValuation) external onlyOwner {
-        properties[_tokenId].valuation = _newValuation;
-        emit PropertyValuationUpdated(_tokenId, _newValuation);
+    function modifyValuation(uint256 estateId, uint256 newPrice) external onlyOwner {
+        estateData[estateId].price = newPrice;
+        emit ValuationChanged(estateId, newPrice);
     }
 
-    function getPropertyOwners(uint256 _tokenId) external view returns (address[] memory) {
-        return propertyOwners[_tokenId];
+    function getEstateInfo(uint256 estateId) external view returns (Estate memory) {
+        return estateData[estateId];
     }
 
-    function getOwnerPercentage(uint256 _tokenId, address _owner) external view returns (uint256) {
-        return ownershipPercentage[_tokenId][_owner];
+    function getOwners(uint256 estateId) external view returns (address[] memory) {
+        return estateOwners[estateId].values();
+    }
+
+    function getUnitsHeld(uint256 estateId, address holder) external view returns (uint256) {
+        return shareholdings[estateId][holder];
     }
 
     function _update(
