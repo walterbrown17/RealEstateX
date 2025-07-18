@@ -6,100 +6,110 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-contract EstateChain is ERC721Enumerable, Ownable {
+contract RealEstateX is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    Counters.Counter private _idTracker;
+    Counters.Counter private _tokenIdCounter;
 
-    struct Estate {
-        string location;
-        uint256 area;
-        uint256 price;
+    struct Property {
+        string physicalAddress;
+        uint256 squareFootage;
+        uint256 valuation;
         string coordinates;
         string description;
     }
 
-    mapping(uint256 => Estate) private estateData;
-    mapping(uint256 => uint256) private totalUnits;
-    mapping(uint256 => EnumerableSet.AddressSet) private estateOwners;
-    mapping(uint256 => mapping(address => uint256)) private shareholdings;
+    mapping(uint256 => Property) private _properties;
+    mapping(uint256 => uint256) private _totalShares;
+    mapping(uint256 => EnumerableSet.AddressSet) private _propertyOwners;
+    mapping(uint256 => mapping(address => uint256)) private _shares;
 
-    event EstateMinted(uint256 indexed estateId, address indexed initiator);
-    event ShareTransferred(uint256 indexed estateId, address from, address to, uint256 units);
-    event ValuationChanged(uint256 indexed estateId, uint256 updatedPrice);
+    event PropertyMinted(uint256 indexed propertyId, address indexed owner);
+    event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 shares);
+    event ValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
-    constructor() ERC721("EstateChain", "ECH") Ownable(msg.sender) {}
+    constructor() ERC721("RealEstateX", "REX") Ownable(msg.sender) {}
 
-    function mintEstate(
-        string calldata location,
-        uint256 area,
-        uint256 value,
+    // ========================
+    //      Core Functions
+    // ========================
+
+    function mintProperty(
+        string calldata physicalAddress,
+        uint256 squareFootage,
+        uint256 valuation,
         string calldata coordinates,
-        string calldata legalText,
-        uint256 units
+        string calldata description,
+        uint256 totalUnits
     ) external {
-        uint256 estateId = _idTracker.current();
-        _idTracker.increment();
+        uint256 propertyId = _tokenIdCounter.current();
+        _tokenIdCounter.increment();
 
-        _safeMint(msg.sender, estateId);
-        _createEstate(estateId, location, area, value, coordinates, legalText, units);
-        emit EstateMinted(estateId, msg.sender);
+        _safeMint(msg.sender, propertyId);
+        _registerProperty(propertyId, physicalAddress, squareFootage, valuation, coordinates, description, totalUnits);
+
+        emit PropertyMinted(propertyId, msg.sender);
     }
 
-    function _createEstate(
-        uint256 estateId,
-        string memory location,
-        uint256 area,
-        uint256 value,
+    function _registerProperty(
+        uint256 propertyId,
+        string memory physicalAddress,
+        uint256 squareFootage,
+        uint256 valuation,
         string memory coordinates,
-        string memory legalText,
-        uint256 units
+        string memory description,
+        uint256 totalUnits
     ) internal {
-        estateData[estateId] = Estate(location, area, value, coordinates, legalText);
-        totalUnits[estateId] = units;
-        estateOwners[estateId].add(msg.sender);
-        shareholdings[estateId][msg.sender] = units;
+        _properties[propertyId] = Property(physicalAddress, squareFootage, valuation, coordinates, description);
+        _totalShares[propertyId] = totalUnits;
+        _propertyOwners[propertyId].add(msg.sender);
+        _shares[propertyId][msg.sender] = totalUnits;
     }
 
     function transferShares(
-        uint256 estateId,
-        address recipient,
-        uint256 units
+        uint256 propertyId,
+        address to,
+        uint256 shareUnits
     ) external {
-        require(ownerOf(estateId) == msg.sender, "Only estate owner");
-        require(shareholdings[estateId][msg.sender] >= units, "Not enough units");
+        require(ownerOf(propertyId) == msg.sender, "Only property owner");
+        require(_shares[propertyId][msg.sender] >= shareUnits, "Not enough shares");
 
-        shareholdings[estateId][msg.sender] -= units;
-        shareholdings[estateId][recipient] += units;
+        _shares[propertyId][msg.sender] -= shareUnits;
+        _shares[propertyId][to] += shareUnits;
+        _propertyOwners[propertyId].add(to);
 
-        if (!estateOwners[estateId].contains(recipient)) {
-            estateOwners[estateId].add(recipient);
+        if (balanceOf(to) == 0) {
+            _transfer(msg.sender, to, propertyId);
         }
 
-        if (balanceOf(recipient) == 0) {
-            _transfer(msg.sender, recipient, estateId);
-        }
-
-        emit ShareTransferred(estateId, msg.sender, recipient, units);
+        emit SharesTransferred(propertyId, msg.sender, to, shareUnits);
     }
 
-    function modifyValuation(uint256 estateId, uint256 newPrice) external onlyOwner {
-        estateData[estateId].price = newPrice;
-        emit ValuationChanged(estateId, newPrice);
+    function updateValuation(uint256 propertyId, uint256 newValuation) external onlyOwner {
+        _properties[propertyId].valuation = newValuation;
+        emit ValuationUpdated(propertyId, newValuation);
     }
 
-    function getEstateInfo(uint256 estateId) external view returns (Estate memory) {
-        return estateData[estateId];
+    // ========================
+    //      View Functions
+    // ========================
+
+    function getPropertyInfo(uint256 propertyId) external view returns (Property memory) {
+        return _properties[propertyId];
     }
 
-    function getOwners(uint256 estateId) external view returns (address[] memory) {
-        return estateOwners[estateId].values();
+    function getOwners(uint256 propertyId) external view returns (address[] memory) {
+        return _propertyOwners[propertyId].values();
     }
 
-    function getUnitsHeld(uint256 estateId, address holder) external view returns (uint256) {
-        return shareholdings[estateId][holder];
+    function getShares(uint256 propertyId, address holder) external view returns (uint256) {
+        return _shares[propertyId][holder];
     }
+
+    // ========================
+    //      Overrides
+    // ========================
 
     function _update(
         address to,
