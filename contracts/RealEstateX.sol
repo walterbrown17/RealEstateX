@@ -10,49 +10,54 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    Counters.Counter private tokenIdCounter;
+    // Counter for assigning unique property IDs
+    Counters.Counter private _propertyIdTracker;
 
+    // Structure representing a property
     struct Property {
         string location;
-        uint256 area;
-        uint256 valuation;
-        string coordinates;
+        uint256 area;         // in square feet
+        uint256 valuation;    // in wei or chosen currency unit
+        string coordinates;   // GPS or mapping coordinates
         string description;
     }
 
     // ======== State Variables ========
 
-    mapping(uint256 => Property) private propertyDetails;
-    mapping(uint256 => uint256) private totalUnits;
-    mapping(uint256 => EnumerableSet.AddressSet) private shareholders;
-    mapping(uint256 => mapping(address => uint256)) private shareholdings;
+    mapping(uint256 => Property) private _properties;
+    mapping(uint256 => uint256) private _totalShares;
+    mapping(uint256 => EnumerableSet.AddressSet) private _propertyShareholders;
+    mapping(uint256 => mapping(address => uint256)) private _holderShares;
 
     // ======== Events ========
 
-    event PropertyMinted(uint256 indexed propertyId, address indexed minter);
-    event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 units);
-    event ValuationChanged(uint256 indexed propertyId, uint256 newValuation);
+    event PropertyMinted(uint256 indexed propertyId, address indexed creator);
+    event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 amount);
+    event ValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
     // ======== Constructor ========
 
     constructor() ERC721("RealEstateX", "REX") Ownable(msg.sender) {}
 
-    // ======== Core Functions ========
+    // ======== External Functions ========
 
+    /**
+     * @notice Mints a new property NFT with associated share ownership.
+     */
     function mintProperty(
         string calldata location_,
         uint256 area_,
         uint256 valuation_,
         string calldata coordinates_,
         string calldata description_,
-        uint256 units_
+        uint256 shareUnits_
     ) external {
-        uint256 propertyId = tokenIdCounter.current();
-        tokenIdCounter.increment();
+        uint256 newPropertyId = _propertyIdTracker.current();
+        _propertyIdTracker.increment();
 
-        _safeMint(msg.sender, propertyId);
+        _safeMint(msg.sender, newPropertyId);
 
-        propertyDetails[propertyId] = Property({
+        _properties[newPropertyId] = Property({
             location: location_,
             area: area_,
             valuation: valuation_,
@@ -60,52 +65,63 @@ contract RealEstateX is ERC721Enumerable, Ownable {
             description: description_
         });
 
-        totalUnits[propertyId] = units_;
-        shareholders[propertyId].add(msg.sender);
-        shareholdings[propertyId][msg.sender] = units_;
+        _totalShares[newPropertyId] = shareUnits_;
+        _propertyShareholders[newPropertyId].add(msg.sender);
+        _holderShares[newPropertyId][msg.sender] = shareUnits_;
 
-        emit PropertyMinted(propertyId, msg.sender);
+        emit PropertyMinted(newPropertyId, msg.sender);
     }
 
+    /**
+     * @notice Transfers fractional shares of a property to another user.
+     */
     function transferShares(
         uint256 propertyId,
         address recipient,
-        uint256 units
+        uint256 shareAmount
     ) external {
-        require(ownerOf(propertyId) == msg.sender, "Caller is not NFT owner");
-        require(shareholdings[propertyId][msg.sender] >= units, "Not enough shares");
+        require(ownerOf(propertyId) == msg.sender, "Caller is not the NFT owner");
+        require(_holderShares[propertyId][msg.sender] >= shareAmount, "Insufficient share balance");
 
-        shareholdings[propertyId][msg.sender] -= units;
-        shareholdings[propertyId][recipient] += units;
-        shareholders[propertyId].add(recipient);
+        _holderShares[propertyId][msg.sender] -= shareAmount;
+        _holderShares[propertyId][recipient] += shareAmount;
+        _propertyShareholders[propertyId].add(recipient);
 
+        // Transfer the NFT only if the recipient doesn't already own it
         if (balanceOf(recipient) == 0) {
             _transfer(msg.sender, recipient, propertyId);
         }
 
-        emit SharesTransferred(propertyId, msg.sender, recipient, units);
+        emit SharesTransferred(propertyId, msg.sender, recipient, shareAmount);
     }
 
-    function updateValuation(uint256 propertyId, uint256 updatedValuation) external onlyOwner {
-        propertyDetails[propertyId].valuation = updatedValuation;
-        emit ValuationChanged(propertyId, updatedValuation);
+    /**
+     * @notice Allows contract owner to update property valuation.
+     */
+    function updateValuation(uint256 propertyId, uint256 newValuation) external onlyOwner {
+        _properties[propertyId].valuation = newValuation;
+        emit ValuationUpdated(propertyId, newValuation);
     }
 
     // ======== View Functions ========
 
     function getPropertyInfo(uint256 propertyId) external view returns (Property memory) {
-        return propertyDetails[propertyId];
+        return _properties[propertyId];
     }
 
-    function getOwners(uint256 propertyId) external view returns (address[] memory) {
-        return shareholders[propertyId].values();
+    function getShareholders(uint256 propertyId) external view returns (address[] memory) {
+        return _propertyShareholders[propertyId].values();
     }
 
-    function getShares(uint256 propertyId, address holder) external view returns (uint256) {
-        return shareholdings[propertyId][holder];
+    function getShareBalance(uint256 propertyId, address holder) external view returns (uint256) {
+        return _holderShares[propertyId][holder];
     }
 
-    // ======== Overrides ========
+    function getTotalShares(uint256 propertyId) external view returns (uint256) {
+        return _totalShares[propertyId];
+    }
+
+    // ======== Internal Overrides ========
 
     function _update(
         address to,
