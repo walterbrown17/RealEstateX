@@ -10,71 +10,57 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    // Counter for assigning unique property IDs
-    Counters.Counter private _propertyIdTracker;
+    Counters.Counter private _nextPropertyId;
 
-    // Structure representing a property
     struct Property {
         string location;
-        uint256 area;         // in square feet
-        uint256 valuation;    // in wei or chosen currency unit
-        string coordinates;   // GPS or mapping coordinates
+        uint256 area;
+        uint256 valuation;
+        string coordinates;
         string description;
     }
-
-    // ======== State Variables ========
 
     mapping(uint256 => Property) private _properties;
     mapping(uint256 => uint256) private _totalShares;
     mapping(uint256 => EnumerableSet.AddressSet) private _propertyShareholders;
     mapping(uint256 => mapping(address => uint256)) private _holderShares;
 
-    // ======== Events ========
-
     event PropertyMinted(uint256 indexed propertyId, address indexed creator);
     event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 amount);
     event ValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
-    // ======== Constructor ========
-
     constructor() ERC721("RealEstateX", "REX") Ownable(msg.sender) {}
 
-    // ======== External Functions ========
+    // ========== External Functions ==========
 
-    /**
-     * @notice Mints a new property NFT with associated share ownership.
-     */
     function mintProperty(
-        string calldata location_,
-        uint256 area_,
-        uint256 valuation_,
-        string calldata coordinates_,
-        string calldata description_,
-        uint256 shareUnits_
+        string calldata location,
+        uint256 area,
+        uint256 valuation,
+        string calldata coordinates,
+        string calldata description,
+        uint256 shareUnits
     ) external {
-        uint256 newPropertyId = _propertyIdTracker.current();
-        _propertyIdTracker.increment();
+        uint256 propertyId = _nextPropertyId.current();
+        _nextPropertyId.increment();
 
-        _safeMint(msg.sender, newPropertyId);
+        _safeMint(msg.sender, propertyId);
 
-        _properties[newPropertyId] = Property({
-            location: location_,
-            area: area_,
-            valuation: valuation_,
-            coordinates: coordinates_,
-            description: description_
+        _properties[propertyId] = Property({
+            location: location,
+            area: area,
+            valuation: valuation,
+            coordinates: coordinates,
+            description: description
         });
 
-        _totalShares[newPropertyId] = shareUnits_;
-        _propertyShareholders[newPropertyId].add(msg.sender);
-        _holderShares[newPropertyId][msg.sender] = shareUnits_;
+        _totalShares[propertyId] = shareUnits;
+        _propertyShareholders[propertyId].add(msg.sender);
+        _holderShares[propertyId][msg.sender] = shareUnits;
 
-        emit PropertyMinted(newPropertyId, msg.sender);
+        emit PropertyMinted(propertyId, msg.sender);
     }
 
-    /**
-     * @notice Transfers fractional shares of a property to another user.
-     */
     function transferShares(
         uint256 propertyId,
         address recipient,
@@ -87,7 +73,6 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         _holderShares[propertyId][recipient] += shareAmount;
         _propertyShareholders[propertyId].add(recipient);
 
-        // Transfer the NFT only if the recipient doesn't already own it
         if (balanceOf(recipient) == 0) {
             _transfer(msg.sender, recipient, propertyId);
         }
@@ -95,15 +80,12 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         emit SharesTransferred(propertyId, msg.sender, recipient, shareAmount);
     }
 
-    /**
-     * @notice Allows contract owner to update property valuation.
-     */
     function updateValuation(uint256 propertyId, uint256 newValuation) external onlyOwner {
         _properties[propertyId].valuation = newValuation;
         emit ValuationUpdated(propertyId, newValuation);
     }
 
-    // ======== View Functions ========
+    // ========== View Functions ==========
 
     function getPropertyInfo(uint256 propertyId) external view returns (Property memory) {
         return _properties[propertyId];
@@ -121,7 +103,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         return _totalShares[propertyId];
     }
 
-    // ======== Internal Overrides ========
+    // ========== Internal Overrides ==========
 
     function _update(
         address to,
