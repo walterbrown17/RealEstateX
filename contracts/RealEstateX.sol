@@ -10,7 +10,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    Counters.Counter private _nextPropertyId;
+    Counters.Counter private _propertyIdCounter;
 
     struct Property {
         string location;
@@ -20,43 +20,51 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         string description;
     }
 
+    // PropertyId => Property metadata
     mapping(uint256 => Property) private _properties;
+
+    // PropertyId => total share units available
     mapping(uint256 => uint256) private _totalShares;
+
+    // PropertyId => set of shareholders
     mapping(uint256 => EnumerableSet.AddressSet) private _propertyShareholders;
+
+    // PropertyId => (holder => share units)
     mapping(uint256 => mapping(address => uint256)) private _holderShares;
 
+    // Events
     event PropertyMinted(uint256 indexed propertyId, address indexed creator);
     event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 amount);
     event ValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
-    constructor() ERC721("RealEstateX", "REX") Ownable(msg.sender) {}
+    constructor() ERC721("RealEstateX", "REX") {}
 
     // ========== External Functions ==========
 
     function mintProperty(
-        string calldata location,
-        uint256 area,
-        uint256 valuation,
-        string calldata coordinates,
-        string calldata description,
-        uint256 shareUnits
+        string calldata location_,
+        uint256 area_,
+        uint256 valuation_,
+        string calldata coordinates_,
+        string calldata description_,
+        uint256 shareUnits_
     ) external {
-        uint256 propertyId = _nextPropertyId.current();
-        _nextPropertyId.increment();
+        uint256 propertyId = _propertyIdCounter.current();
+        _propertyIdCounter.increment();
 
         _safeMint(msg.sender, propertyId);
 
         _properties[propertyId] = Property({
-            location: location,
-            area: area,
-            valuation: valuation,
-            coordinates: coordinates,
-            description: description
+            location: location_,
+            area: area_,
+            valuation: valuation_,
+            coordinates: coordinates_,
+            description: description_
         });
 
-        _totalShares[propertyId] = shareUnits;
+        _totalShares[propertyId] = shareUnits_;
         _propertyShareholders[propertyId].add(msg.sender);
-        _holderShares[propertyId][msg.sender] = shareUnits;
+        _holderShares[propertyId][msg.sender] = shareUnits_;
 
         emit PropertyMinted(propertyId, msg.sender);
     }
@@ -66,8 +74,8 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         address recipient,
         uint256 shareAmount
     ) external {
-        require(ownerOf(propertyId) == msg.sender, "Caller is not the NFT owner");
-        require(_holderShares[propertyId][msg.sender] >= shareAmount, "Insufficient share balance");
+        require(ownerOf(propertyId) == msg.sender, "Not NFT owner");
+        require(_holderShares[propertyId][msg.sender] >= shareAmount, "Insufficient shares");
 
         _holderShares[propertyId][msg.sender] -= shareAmount;
         _holderShares[propertyId][recipient] += shareAmount;
