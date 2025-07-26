@@ -10,7 +10,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    Counters.Counter private _nextId;
+    Counters.Counter private _propertyCounter;
 
     struct Property {
         string location;
@@ -22,10 +22,10 @@ contract RealEstateX is ERC721Enumerable, Ownable {
 
     // ========== Storage ==========
 
-    mapping(uint256 => Property) private _properties;                  // propertyId => Property data
-    mapping(uint256 => uint256) private _totalShares;                 // propertyId => total share units
-    mapping(uint256 => EnumerableSet.AddressSet) private _shareholders; // propertyId => shareholders
-    mapping(uint256 => mapping(address => uint256)) private _shares;    // propertyId => (owner => units)
+    mapping(uint256 => Property) private _propertyDetails;
+    mapping(uint256 => uint256) private _propertyShares;
+    mapping(uint256 => EnumerableSet.AddressSet) private _shareholders;
+    mapping(uint256 => mapping(address => uint256)) private _shares;
 
     // ========== Events ==========
 
@@ -45,12 +45,12 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         string calldata description,
         uint256 shareUnits
     ) external {
-        uint256 propertyId = _nextId.current();
-        _nextId.increment();
+        uint256 id = _propertyCounter.current();
+        _propertyCounter.increment();
 
-        _safeMint(msg.sender, propertyId);
+        _safeMint(msg.sender, id);
 
-        _properties[propertyId] = Property({
+        _propertyDetails[id] = Property({
             location: location,
             area: area,
             valuation: valuation,
@@ -58,11 +58,11 @@ contract RealEstateX is ERC721Enumerable, Ownable {
             description: description
         });
 
-        _totalShares[propertyId] = shareUnits;
-        _shareholders[propertyId].add(msg.sender);
-        _shares[propertyId][msg.sender] = shareUnits;
+        _propertyShares[id] = shareUnits;
+        _shareholders[id].add(msg.sender);
+        _shares[id][msg.sender] = shareUnits;
 
-        emit PropertyMinted(propertyId, msg.sender);
+        emit PropertyMinted(id, msg.sender);
     }
 
     function transferShares(
@@ -70,15 +70,15 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         address to,
         uint256 amount
     ) external {
-        require(ownerOf(propertyId) == msg.sender, "Not property owner");
-        require(_shares[propertyId][msg.sender] >= amount, "Not enough shares");
+        require(ownerOf(propertyId) == msg.sender, "Caller is not the owner");
+        require(_shares[propertyId][msg.sender] >= amount, "Insufficient shares");
 
         _shares[propertyId][msg.sender] -= amount;
         _shares[propertyId][to] += amount;
         _shareholders[propertyId].add(to);
 
-        // Transfer NFT ownership if recipient had no token previously
-        if (balanceOf(to) == 0) {
+        // Optional: Transfer token if full ownership changes
+        if (_shares[propertyId][msg.sender] == 0 && balanceOf(msg.sender) > 0) {
             _transfer(msg.sender, to, propertyId);
         }
 
@@ -86,26 +86,28 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     }
 
     function updateValuation(uint256 propertyId, uint256 newValuation) external onlyOwner {
-        _properties[propertyId].valuation = newValuation;
+        require(_exists(propertyId), "Invalid property ID");
+        _propertyDetails[propertyId].valuation = newValuation;
+
         emit ValuationUpdated(propertyId, newValuation);
     }
 
     // ========== View Functions ==========
 
     function getPropertyInfo(uint256 propertyId) external view returns (Property memory) {
-        return _properties[propertyId];
+        return _propertyDetails[propertyId];
     }
 
     function getShareholders(uint256 propertyId) external view returns (address[] memory) {
         return _shareholders[propertyId].values();
     }
 
-    function getShareBalance(uint256 propertyId, address holder) external view returns (uint256) {
-        return _shares[propertyId][holder];
+    function getShareBalance(uint256 propertyId, address account) external view returns (uint256) {
+        return _shares[propertyId][account];
     }
 
     function getTotalShares(uint256 propertyId) external view returns (uint256) {
-        return _totalShares[propertyId];
+        return _propertyShares[propertyId];
     }
 
     // ========== Overrides ==========
