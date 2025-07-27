@@ -33,6 +33,8 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 amount);
     event ValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
+    // ========== Constructor ==========
+
     constructor() ERC721("RealEstateX", "REX") {}
 
     // ========== External Functions ==========
@@ -45,12 +47,12 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         string calldata description,
         uint256 shareUnits
     ) external {
-        uint256 id = _propertyCounter.current();
+        uint256 propertyId = _propertyCounter.current();
         _propertyCounter.increment();
 
-        _safeMint(msg.sender, id);
+        _safeMint(msg.sender, propertyId);
 
-        _propertyDetails[id] = Property({
+        _propertyDetails[propertyId] = Property({
             location: location,
             area: area,
             valuation: valuation,
@@ -58,11 +60,11 @@ contract RealEstateX is ERC721Enumerable, Ownable {
             description: description
         });
 
-        _propertyShares[id] = shareUnits;
-        _shareholders[id].add(msg.sender);
-        _shares[id][msg.sender] = shareUnits;
+        _propertyShares[propertyId] = shareUnits;
+        _shareholders[propertyId].add(msg.sender);
+        _shares[propertyId][msg.sender] = shareUnits;
 
-        emit PropertyMinted(id, msg.sender);
+        emit PropertyMinted(propertyId, msg.sender);
     }
 
     function transferShares(
@@ -72,12 +74,13 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     ) external {
         require(ownerOf(propertyId) == msg.sender, "Caller is not the owner");
         require(_shares[propertyId][msg.sender] >= amount, "Insufficient shares");
+        require(to != address(0), "Invalid recipient");
 
         _shares[propertyId][msg.sender] -= amount;
         _shares[propertyId][to] += amount;
         _shareholders[propertyId].add(to);
 
-        // Optional: Transfer token if full ownership changes
+        // Optional: Transfer NFT if sender has zero shares left
         if (_shares[propertyId][msg.sender] == 0 && balanceOf(msg.sender) > 0) {
             _transfer(msg.sender, to, propertyId);
         }
