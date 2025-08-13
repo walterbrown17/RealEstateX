@@ -21,24 +21,20 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     }
 
     // ========== Storage ==========
-
     mapping(uint256 => Property) private _propertyDetails;
     mapping(uint256 => uint256) private _propertyShares;
     mapping(uint256 => EnumerableSet.AddressSet) private _shareholders;
     mapping(uint256 => mapping(address => uint256)) private _shares;
 
     // ========== Events ==========
-
     event PropertyMinted(uint256 indexed propertyId, address indexed creator);
     event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 amount);
     event ValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
     // ========== Constructor ==========
-
     constructor() ERC721("RealEstateX", "REX") {}
 
     // ========== External Functions ==========
-
     function mintProperty(
         string calldata location,
         uint256 area,
@@ -72,6 +68,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         address to,
         uint256 amount
     ) external {
+        require(_exists(propertyId), "Property does not exist");
         require(ownerOf(propertyId) == msg.sender, "Caller is not the owner");
         require(_shares[propertyId][msg.sender] >= amount, "Insufficient shares");
         require(to != address(0), "Invalid recipient");
@@ -80,8 +77,8 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         _shares[propertyId][to] += amount;
         _shareholders[propertyId].add(to);
 
-        // Optional: Transfer NFT if sender has zero shares left
-        if (_shares[propertyId][msg.sender] == 0 && balanceOf(msg.sender) > 0) {
+        // Transfer NFT if sender no longer holds any shares
+        if (_shares[propertyId][msg.sender] == 0) {
             _transfer(msg.sender, to, propertyId);
         }
 
@@ -91,12 +88,10 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     function updateValuation(uint256 propertyId, uint256 newValuation) external onlyOwner {
         require(_exists(propertyId), "Invalid property ID");
         _propertyDetails[propertyId].valuation = newValuation;
-
         emit ValuationUpdated(propertyId, newValuation);
     }
 
     // ========== View Functions ==========
-
     function getPropertyInfo(uint256 propertyId) external view returns (Property memory) {
         return _propertyDetails[propertyId];
     }
@@ -114,15 +109,6 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     }
 
     // ========== Overrides ==========
-
-    function _update(
-        address to,
-        uint256 tokenId,
-        address auth
-    ) internal override(ERC721Enumerable) returns (address) {
-        return super._update(to, tokenId, auth);
-    }
-
     function supportsInterface(bytes4 interfaceId)
         public
         view
