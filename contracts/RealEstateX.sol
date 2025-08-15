@@ -21,8 +21,8 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     }
 
     // ========== Storage ==========
-    mapping(uint256 => Property) private _propertyDetails;
-    mapping(uint256 => uint256) private _propertyShares;
+    mapping(uint256 => Property) private _properties;
+    mapping(uint256 => uint256) private _totalShares;
     mapping(uint256 => EnumerableSet.AddressSet) private _shareholders;
     mapping(uint256 => mapping(address => uint256)) private _shares;
 
@@ -43,22 +43,13 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         string calldata description,
         uint256 shareUnits
     ) external {
-        uint256 propertyId = _propertyCounter.current();
-        _propertyCounter.increment();
+        uint256 propertyId = _nextPropertyId();
 
         _safeMint(msg.sender, propertyId);
+        _properties[propertyId] = Property(location, area, valuation, coordinates, description);
 
-        _propertyDetails[propertyId] = Property({
-            location: location,
-            area: area,
-            valuation: valuation,
-            coordinates: coordinates,
-            description: description
-        });
-
-        _propertyShares[propertyId] = shareUnits;
-        _shareholders[propertyId].add(msg.sender);
-        _shares[propertyId][msg.sender] = shareUnits;
+        _totalShares[propertyId] = shareUnits;
+        _addShareholder(propertyId, msg.sender, shareUnits);
 
         emit PropertyMinted(propertyId, msg.sender);
     }
@@ -68,16 +59,12 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         address to,
         uint256 amount
     ) external {
-        require(_exists(propertyId), "Property does not exist");
-        require(ownerOf(propertyId) == msg.sender, "Caller is not the owner");
-        require(_shares[propertyId][msg.sender] >= amount, "Insufficient shares");
-        require(to != address(0), "Invalid recipient");
+        _validateTransfer(propertyId, to, amount);
 
         _shares[propertyId][msg.sender] -= amount;
         _shares[propertyId][to] += amount;
         _shareholders[propertyId].add(to);
 
-        // Transfer NFT if sender no longer holds any shares
         if (_shares[propertyId][msg.sender] == 0) {
             _transfer(msg.sender, to, propertyId);
         }
@@ -87,13 +74,13 @@ contract RealEstateX is ERC721Enumerable, Ownable {
 
     function updateValuation(uint256 propertyId, uint256 newValuation) external onlyOwner {
         require(_exists(propertyId), "Invalid property ID");
-        _propertyDetails[propertyId].valuation = newValuation;
+        _properties[propertyId].valuation = newValuation;
         emit ValuationUpdated(propertyId, newValuation);
     }
 
     // ========== View Functions ==========
     function getPropertyInfo(uint256 propertyId) external view returns (Property memory) {
-        return _propertyDetails[propertyId];
+        return _properties[propertyId];
     }
 
     function getShareholders(uint256 propertyId) external view returns (address[] memory) {
@@ -105,7 +92,26 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     }
 
     function getTotalShares(uint256 propertyId) external view returns (uint256) {
-        return _propertyShares[propertyId];
+        return _totalShares[propertyId];
+    }
+
+    // ========== Internal Helpers ==========
+    function _nextPropertyId() internal returns (uint256) {
+        uint256 id = _propertyCounter.current();
+        _propertyCounter.increment();
+        return id;
+    }
+
+    function _addShareholder(uint256 propertyId, address account, uint256 shares) internal {
+        _shareholders[propertyId].add(account);
+        _shares[propertyId][account] = shares;
+    }
+
+    function _validateTransfer(uint256 propertyId, address to, uint256 amount) internal view {
+        require(_exists(propertyId), "Property does not exist");
+        require(ownerOf(propertyId) == msg.sender, "Caller is not the owner");
+        require(_shares[propertyId][msg.sender] >= amount, "Insufficient shares");
+        require(to != address(0), "Invalid recipient");
     }
 
     // ========== Overrides ==========
