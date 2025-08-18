@@ -100,7 +100,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         return _propertyShares[propertyId];
     }
 
-    // ========== Internal Helpers ==========
+    // == Internal Helpers ==
     function _generatePropertyId() internal returns (uint256) {
         uint256 newId = _propertyIdTracker.current();
         _propertyIdTracker.increment();
