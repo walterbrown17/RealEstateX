@@ -32,7 +32,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 shares);
     event PropertyValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
 
-    // ========== Constructor ==========
+    // ========== Constructors ==========
     constructor() ERC721("RealEstateX", "REX") {}
 
     // ========== External Functions ==========
