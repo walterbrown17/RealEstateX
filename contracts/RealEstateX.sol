@@ -12,7 +12,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
 
     Counters.Counter private _propertyIdTracker;
 
-    // =========== Structs ===========
+    // ========= Structs =========
     struct Property {
         string location;
         uint256 area;
