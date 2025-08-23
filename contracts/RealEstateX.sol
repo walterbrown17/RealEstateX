@@ -27,7 +27,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
     mapping(uint256 => EnumerableSet.AddressSet) private _propertyShareholders;
     mapping(uint256 => mapping(address => uint256)) private _shareBalances;
 
-    // ========== Events ==========
+    // ============= Events =============
     event PropertyCreated(uint256 indexed propertyId, address indexed creator);
     event SharesTransferred(uint256 indexed propertyId, address indexed from, address indexed to, uint256 shares);
     event PropertyValuationUpdated(uint256 indexed propertyId, uint256 newValuation);
