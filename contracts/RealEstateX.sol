@@ -83,7 +83,7 @@ contract RealEstateX is ERC721Enumerable, Ownable {
         emit PropertyValuationUpdated(propertyId, newValuation);
     }
 
-    // ========== View Functions ==========
+    // ============== View Functions ==============
     function getProperty(uint256 propertyId) external view returns (Property memory) {
         return _propertyDetails[propertyId];
     }
